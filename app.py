@@ -117,7 +117,7 @@ if uploaded_file is not None:
     col4.metric("✅ Success Rate", f"{success_rate:.1f}%")
     
     # ============================================
-    # NEW SECTION: MERCHANT PAYMENT ANALYSIS
+    # MERCHANT PAYMENT ANALYSIS (Tabular Form)
     # ============================================
     st.subheader("🏪 Merchant Payment Analysis")
     
@@ -130,91 +130,84 @@ if uploaded_file is not None:
     if len(merchant_data) > 0:
         # Summary metrics
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("🏪 Total Merchants Served", f"{merchant_data['Service'].nunique():,}")
-        col2.metric("💳 Total Merchant Transactions", f"{len(merchant_data):,}")
-        col3.metric("💰 Total Merchant Volume", f"Rs. {merchant_data['Amount (Rs)'].sum():,.2f}")
-        col4.metric("👥 Unique Paying Users", f"{merchant_data['MemberId'].nunique():,}")
+        col1.metric("🏪 Total Merchants", f"{merchant_data['Service'].nunique():,}")
+        col2.metric("💳 Total Transactions", f"{len(merchant_data):,}")
+        col3.metric("💰 Total Volume", f"Rs. {merchant_data['Amount (Rs)'].sum():,.2f}")
+        col4.metric("👥 Unique Payers", f"{merchant_data['MemberId'].nunique():,}")
         
-        # Merchant ranking by COUNT
-        st.write("### 📊 Merchant Ranking by Transaction Count")
-        merchant_by_count = merchant_data.groupby('Service').agg({
+        # Merchant summary table
+        merchant_summary = merchant_data.groupby('Service').agg({
             'TxnId': 'count',
             'Amount (Rs)': 'sum',
             'MemberId': 'nunique'
         }).reset_index()
-        merchant_by_count.columns = ['Merchant', 'Transaction Count', 'Total Volume (Rs)', 'Unique Users']
-        merchant_by_count = merchant_by_count.sort_values('Transaction Count', ascending=False)
+        merchant_summary.columns = ['Merchant Name', 'Transaction Count', 'Total Volume (Rs)', 'Unique Users']
+        merchant_summary = merchant_summary.sort_values('Total Volume (Rs)', ascending=False)
         
-        col1, col2 = st.columns(2)
+        # Add rank columns
+        merchant_summary['Rank by Volume'] = merchant_summary['Total Volume (Rs)'].rank(ascending=False).astype(int)
+        merchant_summary['Rank by Count'] = merchant_summary['Transaction Count'].rank(ascending=False).astype(int)
         
-        # Bar chart - Top 15 by Count
-        fig_count = px.bar(merchant_by_count.head(15), 
-                           x='Merchant', y='Transaction Count', 
-                           title='Top 15 Merchants by Transaction Count',
-                           color='Transaction Count', 
-                           text='Transaction Count')
-        fig_count.update_layout(xaxis_tickangle=-45)
-        col1.plotly_chart(fig_count, use_container_width=True)
+        # Calculate average transaction value
+        merchant_summary['Avg Transaction (Rs)'] = merchant_summary['Total Volume (Rs)'] / merchant_summary['Transaction Count']
         
-        # Bar chart - Top 15 by Volume
-        fig_volume = px.bar(merchant_by_count.head(15), 
-                            x='Merchant', y='Total Volume (Rs)', 
-                            title='Top 15 Merchants by Transaction Volume (Rs)',
-                            color='Total Volume (Rs)', 
-                            text='Total Volume (Rs)')
-        fig_volume.update_layout(xaxis_tickangle=-45)
-        col2.plotly_chart(fig_volume, use_container_width=True)
+        # Display main merchant table
+        st.write("### 📋 Merchant Payment Summary Table")
+        st.dataframe(
+            merchant_summary[['Rank by Volume', 'Merchant Name', 'Transaction Count', 'Total Volume (Rs)', 'Avg Transaction (Rs)', 'Unique Users', 'Rank by Count']].head(50),
+            use_container_width=True,
+            column_config={
+                'Rank by Volume': st.column_config.NumberColumn('Rank', width='small'),
+                'Merchant Name': st.column_config.TextColumn('Merchant', width='large'),
+                'Transaction Count': st.column_config.NumberColumn('Count', format='%d'),
+                'Total Volume (Rs)': st.column_config.NumberColumn('Total Volume', format='Rs. %.2f'),
+                'Avg Transaction (Rs)': st.column_config.NumberColumn('Avg Transaction', format='Rs. %.2f'),
+                'Unique Users': st.column_config.NumberColumn('Unique Users', format='%d'),
+                'Rank by Count': st.column_config.NumberColumn('Count Rank', width='small')
+            }
+        )
         
-        # Detailed Merchant Table
-        st.write("### 📋 Detailed Merchant Performance")
-        st.dataframe(merchant_by_count.head(20).style.format({
-            'Transaction Count': '{:,}',
-            'Total Volume (Rs)': 'Rs. {:,.2f}',
-            'Unique Users': '{:,}'
-        }), use_container_width=True)
+        # Tabs for different views
+        tab1, tab2, tab3 = st.tabs(["📊 Top by Volume", "📈 Top by Count", "👥 Top by Users"])
         
-        # Merchant category breakdown
-        st.write("### 🏷️ Merchant Category Breakdown")
+        with tab1:
+            st.write("### Top 20 Merchants by Transaction Volume")
+            st.dataframe(
+                merchant_summary[['Merchant Name', 'Total Volume (Rs)', 'Transaction Count', 'Avg Transaction (Rs)']].head(20).style.format({
+                    'Total Volume (Rs)': 'Rs. {:,.2f}',
+                    'Transaction Count': '{:,}',
+                    'Avg Transaction (Rs)': 'Rs. {:,.2f}'
+                }),
+                use_container_width=True
+            )
         
-        # Categorize merchants
-        def categorize_merchant(merchant):
-            merchant_upper = str(merchant).upper()
-            if 'INSURANCE' in merchant_upper:
-                return '🛡️ Insurance'
-            elif 'INTERNET' in merchant_upper or 'WIFI' in merchant_upper or 'FIBER' in merchant_upper:
-                return '🌐 Internet Service'
-            elif 'TV' in merchant_upper or 'DISSHOME' in merchant_upper or 'MAXTV' in merchant_upper:
-                return '📺 Television'
-            elif 'NEA' in merchant_upper or 'ELECTRICITY' in merchant_upper or 'KUKL' in merchant_upper or 'WATER' in merchant_upper:
-                return '⚡ Utilities'
-            elif 'AIRLINES' in merchant_upper or 'FLIGHT' in merchant_upper or 'INTERNATIONALFLIGHT' in merchant_upper:
-                return '✈️ Travel/Airlines'
-            elif 'QR' in merchant_upper:
-                return '📱 QR Payments'
-            elif 'MERCHANT' in merchant_upper:
-                return '🏪 General Merchant'
-            elif 'GOVERNMENT' in merchant_upper or 'DOFE' in merchant_upper or 'TAX' in merchant_upper or 'FINE' in merchant_upper or 'COMMISSION' in merchant_upper:
-                return '🏛️ Government'
-            else:
-                return '📌 Other'
+        with tab2:
+            st.write("### Top 20 Merchants by Transaction Count")
+            st.dataframe(
+                merchant_summary.sort_values('Transaction Count', ascending=False)[['Merchant Name', 'Transaction Count', 'Total Volume (Rs)', 'Avg Transaction (Rs)']].head(20).style.format({
+                    'Total Volume (Rs)': 'Rs. {:,.2f}',
+                    'Transaction Count': '{:,}',
+                    'Avg Transaction (Rs)': 'Rs. {:,.2f}'
+                }),
+                use_container_width=True
+            )
         
-        merchant_by_count['Category'] = merchant_by_count['Merchant'].apply(categorize_merchant)
-        category_summary = merchant_by_count.groupby('Category').agg({
-            'Transaction Count': 'sum',
-            'Total Volume (Rs)': 'sum',
-            'Merchant': 'count'
-        }).reset_index()
-        category_summary.columns = ['Category', 'Total Transactions', 'Total Volume (Rs)', 'Number of Merchants']
-        category_summary = category_summary.sort_values('Total Volume (Rs)', ascending=False)
+        with tab3:
+            st.write("### Top 20 Merchants by Unique Users")
+            st.dataframe(
+                merchant_summary.sort_values('Unique Users', ascending=False)[['Merchant Name', 'Unique Users', 'Transaction Count', 'Total Volume (Rs)']].head(20).style.format({
+                    'Total Volume (Rs)': 'Rs. {:,.2f}',
+                    'Transaction Count': '{:,}',
+                    'Unique Users': '{:,}'
+                }),
+                use_container_width=True
+            )
         
-        col1, col2 = st.columns(2)
-        fig_category_count = px.table(category_summary, values='Total Transactions', names='Category', title='Transactions by Merchant Category')
-        col1.plotly_chart(fig_category_count, use_container_width=True)
+        # Download full merchant summary
+        csv_merchant = merchant_summary.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Download Complete Merchant Summary (CSV)", csv_merchant, "merchant_summary.csv", "text/csv")
         
-        fig_category_volume = px.table(category_summary, values='Total Volume (Rs)', names='Category', title='Volume by Merchant Category')
-        col2.plotly_chart(fig_category_volume, use_container_width=True)
-        
-        # Top Paying Users (Users who pay merchants the most)
+        # Top Paying Users
         st.write("### 💎 Top Paying Users (Highest Merchant Payment Volume)")
         top_paying_users = merchant_data.groupby('MemberId').agg({
             'Amount (Rs)': 'sum',
@@ -223,7 +216,7 @@ if uploaded_file is not None:
         }).reset_index()
         top_paying_users.columns = ['MemberId', 'Total Paid (Rs)', 'Transaction Count', 'Unique Merchants']
         
-        # Get user names
+        # Add user names and contacts
         if 'Name' in df.columns:
             name_map = df_filtered.groupby('MemberId')['Name'].first().to_dict()
             top_paying_users['Name'] = top_paying_users['MemberId'].map(name_map)
@@ -238,27 +231,27 @@ if uploaded_file is not None:
         
         top_paying_users = top_paying_users.sort_values('Total Paid (Rs)', ascending=False)
         
-        st.dataframe(top_paying_users.head(20).style.format({
-            'Total Paid (Rs)': 'Rs. {:,.2f}',
-            'Transaction Count': '{:,}'
-        }), use_container_width=True)
+        st.dataframe(
+            top_paying_users[['MemberId', 'Name', 'Contact', 'Total Paid (Rs)', 'Transaction Count', 'Unique Merchants']].head(30).style.format({
+                'Total Paid (Rs)': 'Rs. {:,.2f}',
+                'Transaction Count': '{:,}',
+                'Unique Merchants': '{:,}'
+            }),
+            use_container_width=True
+        )
         
-        # Download buttons
-        csv_merchant = merchant_by_count.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Download Merchant Summary as CSV", csv_merchant, "merchant_summary.csv", "text/csv")
-        
-        # Daily merchant payment trend
+        # Daily merchant payment trend (simple chart)
         st.write("### 📅 Daily Merchant Payment Trend")
         daily_merchant = merchant_data.groupby(merchant_data['CreatedDate'].dt.date)['Amount (Rs)'].sum().reset_index()
         daily_merchant.columns = ['Date', 'Merchant Volume']
-        fig_daily = px.line(daily_merchant, x='Date', y='Merchant Volume', title='Daily Merchant Payment Volume')
+        fig_daily = px.line(daily_merchant, x='Date', y='Merchant Volume', title='Daily Merchant Payment Volume', markers=True)
         st.plotly_chart(fig_daily, use_container_width=True)
         
     else:
         st.info("No merchant payment transactions found in selected date range")
     
     # ============================================
-    # CASH-IN MODES ANALYSIS (Keep from before)
+    # CASH-IN MODES ANALYSIS
     # ============================================
     st.subheader("💰 Cash-In Analysis by Mode")
     
@@ -276,12 +269,22 @@ if uploaded_file is not None:
         cash_in_summary = cash_in_summary.sort_values('Total Volume (Rs)', ascending=False)
         
         col1, col2 = st.columns(2)
-        fig_count = px.bar(cash_in_summary.head(10), x='Cash-In Mode', y='Transaction Count', title='Top 10 Cash-In Modes by Count', color='Transaction Count')
+        fig_count = px.bar(cash_in_summary.head(10), x='Cash-In Mode', y='Transaction Count', title='Top 10 Cash-In Modes by Transaction Count', color='Transaction Count', text='Transaction Count')
+        fig_count.update_layout(xaxis_tickangle=-45)
         col1.plotly_chart(fig_count, use_container_width=True)
-        fig_volume = px.bar(cash_in_summary.head(10), x='Cash-In Mode', y='Total Volume (Rs)', title='Top 10 Cash-In Modes by Volume', color='Total Volume (Rs)')
+        
+        fig_volume = px.bar(cash_in_summary.head(10), x='Cash-In Mode', y='Total Volume (Rs)', title='Top 10 Cash-In Modes by Volume (Rs)', color='Total Volume (Rs)', text='Total Volume (Rs)')
+        fig_volume.update_layout(xaxis_tickangle=-45)
         col2.plotly_chart(fig_volume, use_container_width=True)
         
-        st.dataframe(cash_in_summary.style.format({'Transaction Count': '{:,}', 'Total Volume (Rs)': 'Rs. {:,.2f}'}))
+        st.write("### 📋 Cash-In Modes Summary Table")
+        st.dataframe(
+            cash_in_summary.style.format({
+                'Transaction Count': '{:,}',
+                'Total Volume (Rs)': 'Rs. {:,.2f}'
+            }),
+            use_container_width=True
+        )
         
         csv_cashin = cash_in_summary.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Download Cash-In Summary as CSV", csv_cashin, "cashin_summary.csv", "text/csv")
@@ -315,68 +318,104 @@ if uploaded_file is not None:
                 'Cash-In Count': len(user_cashin),
                 'Total P2P Debit (Rs)': user_p2p['Amount (Rs)'].sum(),
                 'P2P Debit Count': len(user_p2p),
-                'Net Flow': user_cashin['Amount (Rs)'].sum() - user_p2p['Amount (Rs)'].sum()
+                'Net Flow (Rs)': user_cashin['Amount (Rs)'].sum() - user_p2p['Amount (Rs)'].sum()
             })
         
         power_users_df = pd.DataFrame(user_summaries).sort_values('Total Cash-In (Rs)', ascending=False)
-        st.dataframe(power_users_df.head(20).style.format({
-            'Total Cash-In (Rs)': 'Rs. {:,.2f}',
-            'Total P2P Debit (Rs)': 'Rs. {:,.2f}',
-            'Net Flow': 'Rs. {:,.2f}'
-        }))
+        
+        col1, col2, col3 = st.columns(3)
+        col1.metric("👥 Power Users", f"{len(power_users):,}")
+        col2.metric("💰 Total Cash-In", f"Rs. {power_users_df['Total Cash-In (Rs)'].sum():,.2f}")
+        col3.metric("💸 Total P2P Debit", f"Rs. {power_users_df['Total P2P Debit (Rs)'].sum():,.2f}")
+        
+        st.dataframe(
+            power_users_df.head(20).style.format({
+                'Total Cash-In (Rs)': 'Rs. {:,.2f}',
+                'Cash-In Count': '{:,}',
+                'Total P2P Debit (Rs)': 'Rs. {:,.2f}',
+                'P2P Debit Count': '{:,}',
+                'Net Flow (Rs)': 'Rs. {:,.2f}'
+            }),
+            use_container_width=True
+        )
         
         csv_power = power_users_df.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Download Power Users as CSV", csv_power, "power_users.csv", "text/csv")
     else:
-        st.info("No power users found")
+        st.info("No power users found in selected date range")
     
     # ============================================
     # USER LOOKUP
     # ============================================
     st.subheader("🔎 User Wallet Lookup")
-    member_id_input = st.text_input("Enter MemberId or Phone Number")
     
-    if member_id_input:
+    search_input = st.text_input("Enter MemberId, Phone Number, or Name")
+    
+    if search_input:
+        search_lower = search_input.lower()
         user_data = df_filtered[
-            (df_filtered['MemberId'].astype(str) == member_id_input) | 
-            (df_filtered['ContactNumber'].astype(str).str.contains(member_id_input, na=False))
+            (df_filtered['MemberId'].astype(str) == search_input) | 
+            (df_filtered['ContactNumber'].astype(str).str.contains(search_input, na=False)) |
+            (df_filtered['Name'].astype(str).str.lower().str.contains(search_lower, na=False))
         ]
         
         if len(user_data) > 0:
+            # User summary
+            user_name = user_data['Name'].iloc[0] if 'Name' in user_data.columns else 'N/A'
+            user_contact = user_data['ContactNumber'].iloc[0] if 'ContactNumber' in user_data.columns else 'N/A'
+            user_member_id = user_data['MemberId'].iloc[0]
+            
+            st.write(f"### User: {user_name}")
+            st.write(f"**Member ID:** {user_member_id} | **Contact:** {user_contact}")
+            
             total_credit = user_data[user_data['Sign'] == 'Credit']['Amount (Rs)'].sum()
             total_debit = user_data[user_data['Sign'] == 'Debit']['Amount (Rs)'].sum()
             
-            col1, col2, col3 = st.columns(3)
+            col1, col2, col3, col4 = st.columns(4)
             col1.metric("💰 Total Credit", f"Rs. {total_credit:,.2f}")
             col2.metric("💸 Total Debit", f"Rs. {total_debit:,.2f}")
             col3.metric("📈 Net Flow", f"Rs. {total_credit - total_debit:,.2f}")
+            col4.metric("📦 Transactions", f"{len(user_data):,}")
             
+            # Show transactions
+            st.write("### 📋 Transaction History")
             display_cols = ['CreatedDate', 'Display Service', 'Sign', 'Amount (Rs)', 'Available Balance(Rs)', 'Remarks', 'Gateway Status']
-            st.dataframe(user_data[display_cols].sort_values('CreatedDate', ascending=False))
+            available_cols = [col for col in display_cols if col in user_data.columns]
+            st.dataframe(user_data[available_cols].sort_values('CreatedDate', ascending=False), use_container_width=True)
+            
+            # Download user data
+            csv_user = user_data.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Download User Transactions as CSV", csv_user, f"user_{user_member_id}_transactions.csv", "text/csv")
         else:
-            st.warning("No transactions found")
+            st.warning("No transactions found for this search")
     
     # ============================================
-    # CHARTS
+    # OVERALL SERVICE CHARTS
     # ============================================
-    st.subheader("📈 Most Used Services")
+    st.subheader("📈 Most Used Services (Overall)")
     col1, col2 = st.columns(2)
+    
     service_count = df_filtered['Display Service'].value_counts().head(10).reset_index()
     service_count.columns = ['Service', 'Count']
     fig1 = px.bar(service_count, x='Service', y='Count', title='Top 10 by Transaction Count', color='Count')
+    fig1.update_layout(xaxis_tickangle=-45)
     col1.plotly_chart(fig1, use_container_width=True)
     
     service_volume = df_filtered.groupby('Display Service')['Amount (Rs)'].sum().sort_values(ascending=False).head(10).reset_index()
     service_volume.columns = ['Service', 'Volume']
-    fig2 = px.bar(service_volume, x='Service', y='Volume', title='Top 10 by Volume', color='Volume')
+    fig2 = px.bar(service_volume, x='Service', y='Volume', title='Top 10 by Volume (Rs)', color='Volume')
+    fig2.update_layout(xaxis_tickangle=-45)
     col2.plotly_chart(fig2, use_container_width=True)
     
+    # Daily trend
     st.subheader("📅 Daily Transaction Trend")
     daily_trend = df_filtered.groupby(df_filtered['CreatedDate'].dt.date)['Amount (Rs)'].sum().reset_index()
     daily_trend.columns = ['Date', 'Volume']
-    fig3 = px.line(daily_trend, x='Date', y='Volume', title='Daily Transaction Volume')
+    fig3 = px.line(daily_trend, x='Date', y='Volume', title='Total Daily Transaction Volume', markers=True)
     st.plotly_chart(fig3, use_container_width=True)
-   
+    
+    # Footer with date range info
+    st.caption(f"📅 Data from {start_date.date()} to {end_date.date()} | Total rows: {len(df_filtered):,}")
     
 else:
     st.info("👈 Please upload your Excel file to get started")
