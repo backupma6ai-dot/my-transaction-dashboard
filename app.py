@@ -208,10 +208,10 @@ if uploaded_file is not None:
         category_summary = category_summary.sort_values('Total Volume (Rs)', ascending=False)
         
         col1, col2 = st.columns(2)
-        fig_category_count = px.pie(category_summary, values='Total Transactions', names='Category', title='Transactions by Merchant Category')
+        fig_category_count = px.table(category_summary, values='Total Transactions', names='Category', title='Transactions by Merchant Category')
         col1.plotly_chart(fig_category_count, use_container_width=True)
         
-        fig_category_volume = px.pie(category_summary, values='Total Volume (Rs)', names='Category', title='Volume by Merchant Category')
+        fig_category_volume = px.table(category_summary, values='Total Volume (Rs)', names='Category', title='Volume by Merchant Category')
         col2.plotly_chart(fig_category_volume, use_container_width=True)
         
         # Top Paying Users (Users who pay merchants the most)
@@ -376,11 +376,7 @@ if uploaded_file is not None:
     daily_trend.columns = ['Date', 'Volume']
     fig3 = px.line(daily_trend, x='Date', y='Volume', title='Daily Transaction Volume')
     st.plotly_chart(fig3, use_container_width=True)
-    
-    st.subheader("💳 Credit vs Debit Analysis")
-    sign_data = df_filtered.groupby('Sign')['Amount (Rs)'].sum().reset_index()
-    fig_sign = px.pie(sign_data, values='Amount (Rs)', names='Sign', title='Credit vs Debit', hole=0.4)
-    st.plotly_chart(fig_sign, use_container_width=True)
+   
     
 else:
     st.info("👈 Please upload your Excel file to get started")
