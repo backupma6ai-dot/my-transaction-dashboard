@@ -122,9 +122,9 @@ if uploaded_file is not None:
     col4.metric("✅ Success Rate", f"{success_rate:.1f}%")
     
     # ============================================
-    # TTR REPORTING - High Value Transactions (Exceeds 10 Lakhs)
+    # TTR REPORTING - High Value Users (Total Volume > 10 Lakhs)
     # ============================================
-    st.subheader("📋 TTR Reporting - High Value Users (Debit/Credit > Rs. 10,00,000)")
+    st.subheader("📋 TTR Reporting - High Value Users (Total Debit + Credit > Rs. 10,00,000)")
     
     # Calculate total debit and credit per user
     user_credit_summary = df_filtered[df_filtered['Sign'] == 'Credit'].groupby('MemberId')['Amount (Rs)'].sum().reset_index()
@@ -149,39 +149,36 @@ if uploaded_file is not None:
     else:
         ttr_report['Contact'] = 'N/A'
     
-    # Calculate net flow
+    # Calculate total volume and net flow
+    ttr_report['Total Volume (Rs)'] = ttr_report['Total Credit (Rs)'] + ttr_report['Total Debit (Rs)']
     ttr_report['Net Flow (Rs)'] = ttr_report['Total Credit (Rs)'] - ttr_report['Total Debit (Rs)']
     
-    # Filter users where credit OR debit exceeds 10,00,000
+    # Filter users where TOTAL VOLUME (Credit + Debit) exceeds 10,00,000
     HIGH_VALUE_THRESHOLD = 1000000
-    high_value_users = ttr_report[
-        (ttr_report['Total Credit (Rs)'] > HIGH_VALUE_THRESHOLD) | 
-        (ttr_report['Total Debit (Rs)'] > HIGH_VALUE_THRESHOLD)
-    ]
+    high_value_users = ttr_report[ttr_report['Total Volume (Rs)'] > HIGH_VALUE_THRESHOLD]
     
     # Sort by highest total volume
-    high_value_users['Total Volume (Rs)'] = high_value_users['Total Credit (Rs)'] + high_value_users['Total Debit (Rs)']
     high_value_users = high_value_users.sort_values('Total Volume (Rs)', ascending=False)
     
     if len(high_value_users) > 0:
         # Summary metrics for TTR
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("⚠️ High Value Users", f"{len(high_value_users):,}")
-        col2.metric("💰 Total Credit (High Value)", f"Rs. {high_value_users['Total Credit (Rs)'].sum():,.2f}")
-        col3.metric("💸 Total Debit (High Value)", f"Rs. {high_value_users['Total Debit (Rs)'].sum():,.2f}")
+        col2.metric("💰 Total Credit", f"Rs. {high_value_users['Total Credit (Rs)'].sum():,.2f}")
+        col3.metric("💸 Total Debit", f"Rs. {high_value_users['Total Debit (Rs)'].sum():,.2f}")
         col4.metric("📊 Total Volume", f"Rs. {high_value_users['Total Volume (Rs)'].sum():,.2f}")
         
         # Tabs for different views
-        tab1, tab2, tab3 = st.tabs(["📊 All High Value Users", "💰 High Credit Users", "💸 High Debit Users"])
+        tab1, tab2, tab3 = st.tabs(["📊 All High Volume Users", "💰 High Credit Users", "💸 High Debit Users"])
         
         with tab1:
-            st.write("### All Users with Debit or Credit > Rs. 10,00,000")
+            st.write("### All Users with Total Transaction Volume > Rs. 10,00,000")
             st.dataframe(
-                high_value_users[['MemberId', 'Name', 'Contact', 'Total Credit (Rs)', 'Total Debit (Rs)', 'Net Flow (Rs)', 'Total Volume (Rs)']].style.format({
+                high_value_users[['MemberId', 'Name', 'Contact', 'Total Credit (Rs)', 'Total Debit (Rs)', 'Total Volume (Rs)', 'Net Flow (Rs)']].head(100).style.format({
                     'Total Credit (Rs)': 'Rs. {:,.2f}',
                     'Total Debit (Rs)': 'Rs. {:,.2f}',
-                    'Net Flow (Rs)': 'Rs. {:,.2f}',
-                    'Total Volume (Rs)': 'Rs. {:,.2f}'
+                    'Total Volume (Rs)': 'Rs. {:,.2f}',
+                    'Net Flow (Rs)': 'Rs. {:,.2f}'
                 }),
                 use_container_width=True
             )
@@ -221,18 +218,6 @@ if uploaded_file is not None:
             "text/csv"
         )
         
-        # Visual - Top 10 High Value Users
-        st.write("### 📊 Top 10 High Value Users by Total Volume")
-        fig_ttr = px.bar(high_value_users.head(10), 
-                         x='Name', 
-                         y=['Total Credit (Rs)', 'Total Debit (Rs)'],
-                         title='Top 10 Users by Total Transaction Volume',
-                         barmode='group',
-                         labels={'value': 'Amount (Rs)', 'variable': 'Transaction Type', 'Name': 'User Name'},
-                         color_discrete_map={'Total Credit (Rs)': 'green', 'Total Debit (Rs)': 'red'})
-        fig_ttr.update_layout(xaxis_tickangle=-45)
-        st.plotly_chart(fig_ttr, use_container_width=True)
-        
         # Expandable section for transaction details of high value users
         with st.expander("🔍 View Transaction Details for High Value Users"):
             selected_user_ttr = st.selectbox("Select User to View Transactions", high_value_users['MemberId'].head(20))
@@ -246,7 +231,7 @@ if uploaded_file is not None:
                 st.dataframe(user_ttr_data[available_cols].sort_values('CreatedDate', ascending=False), use_container_width=True)
         
     else:
-        st.info(f"No users found with total Debit or Credit exceeding Rs. {HIGH_VALUE_THRESHOLD:,} in the selected date range")
+        st.info(f"No users found with total transaction volume exceeding Rs. {HIGH_VALUE_THRESHOLD:,} in the selected date range")
     
     # ============================================
     # MERCHANT PAYMENT ANALYSIS
