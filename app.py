@@ -119,6 +119,10 @@ def get_transaction_category(service, sign):
             return category
     return '#N/A'
 
+# Function to format numbers with commas
+def format_number(x):
+    return f"{x:,.2f}" if isinstance(x, (int, float)) else x
+
 # File uploaders
 st.sidebar.header("📁 Upload Files")
 
@@ -218,17 +222,17 @@ if uploaded_file is not None:
     df_filtered = df[(df['CreatedDate'] >= start_date) & (df['CreatedDate'] <= end_date)]
     
     # ============================================
-    # TOP METRICS
+    # TOP METRICS (with comma formatting)
     # ============================================
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("💰 Total Volume (Rs)", f"{df_filtered['Amount (Rs)'].sum():,.2f}")
+    col1.metric("💰 Total Volume (Rs)", f"Rs. {df_filtered['Amount (Rs)'].sum():,.2f}")
     col2.metric("📦 Total Transactions", f"{len(df_filtered):,}")
-    col3.metric("👥 Unique Users", df_filtered['MemberId'].nunique())
+    col3.metric("👥 Unique Users", f"{df_filtered['MemberId'].nunique():,}")
     success_rate = (df_filtered['Gateway Status'].eq('Success').mean() * 100) if 'Gateway Status' in df.columns else 0
     col4.metric("✅ Success Rate", f"{success_rate:.1f}%")
     
     # ============================================
-    # NEW SECTION: AGENT/USER SEGMENTATION REPORT
+    # AGENT/USER SEGMENTATION REPORT
     # ============================================
     st.subheader("📊 Agent vs User Transaction Report (by Value Range)")
     
@@ -279,53 +283,38 @@ if uploaded_file is not None:
         pivot_report['Value Range'] = pd.Categorical(pivot_report['Value Range'], categories=range_order, ordered=True)
         pivot_report = pivot_report.sort_values(['User Type', 'Value Range'])
         
-        # Display Agent section
+        # Display Agent section with formatted numbers
         st.write("#### 👨‍💼 AGENTS")
         agent_report = pivot_report[pivot_report['User Type'] == 'Agent']
         if len(agent_report) > 0:
-            st.dataframe(
-                agent_report[['Value Range', 'Cash in_Transaction Count', 'Cash in_Total Amount (Rs)',
-                              'Government payment (P2G)_Transaction Count', 'Government payment (P2G)_Total Amount (Rs)',
-                              'Merchant payment_Transaction Count', 'Merchant payment_Total Amount (Rs)',
-                              'Topup_Transaction Count', 'Topup_Total Amount (Rs)',
-                              'Transfer to bank A/C (P2P)_Transaction Count', 'Transfer to bank A/C (P2P)_Total Amount (Rs)',
-                              'Total Transaction Count', 'Total Amount (Rs)']].style.format({
-                                'Cash in_Total Amount (Rs)': 'Rs. {:,.2f}',
-                                'Government payment (P2G)_Total Amount (Rs)': 'Rs. {:,.2f}',
-                                'Merchant payment_Total Amount (Rs)': 'Rs. {:,.2f}',
-                                'Topup_Total Amount (Rs)': 'Rs. {:,.2f}',
-                                'Transfer to bank A/C (P2P)_Total Amount (Rs)': 'Rs. {:,.2f}',
-                                'Total Amount (Rs)': 'Rs. {:,.2f}'
-                              }),
-                use_container_width=True
-            )
+            # Format the dataframe for display
+            display_agent = agent_report.copy()
+            for col in display_agent.columns:
+                if 'Total Amount' in col or 'Total Amount (Rs)' in col:
+                    display_agent[col] = display_agent[col].apply(lambda x: f"Rs. {x:,.2f}")
+                elif 'Transaction Count' in col:
+                    display_agent[col] = display_agent[col].apply(lambda x: f"{x:,.0f}")
+            
+            st.dataframe(display_agent, use_container_width=True)
         else:
             st.info("No Agent transactions in selected date range")
         
-        # Display User section
+        # Display User section with formatted numbers
         st.write("#### 👤 USERS")
         user_report = pivot_report[pivot_report['User Type'] == 'User']
         if len(user_report) > 0:
-            st.dataframe(
-                user_report[['Value Range', 'Cash in_Transaction Count', 'Cash in_Total Amount (Rs)',
-                             'Government payment (P2G)_Transaction Count', 'Government payment (P2G)_Total Amount (Rs)',
-                             'Merchant payment_Transaction Count', 'Merchant payment_Total Amount (Rs)',
-                             'Topup_Transaction Count', 'Topup_Total Amount (Rs)',
-                             'Transfer to bank A/C (P2P)_Transaction Count', 'Transfer to bank A/C (P2P)_Total Amount (Rs)',
-                             'Total Transaction Count', 'Total Amount (Rs)']].style.format({
-                                'Cash in_Total Amount (Rs)': 'Rs. {:,.2f}',
-                                'Government payment (P2G)_Total Amount (Rs)': 'Rs. {:,.2f}',
-                                'Merchant payment_Total Amount (Rs)': 'Rs. {:,.2f}',
-                                'Topup_Total Amount (Rs)': 'Rs. {:,.2f}',
-                                'Transfer to bank A/C (P2P)_Total Amount (Rs)': 'Rs. {:,.2f}',
-                                'Total Amount (Rs)': 'Rs. {:,.2f}'
-                              }),
-                use_container_width=True
-            )
+            display_user = user_report.copy()
+            for col in display_user.columns:
+                if 'Total Amount' in col or 'Total Amount (Rs)' in col:
+                    display_user[col] = display_user[col].apply(lambda x: f"Rs. {x:,.2f}")
+                elif 'Transaction Count' in col:
+                    display_user[col] = display_user[col].apply(lambda x: f"{x:,.0f}")
+            
+            st.dataframe(display_user, use_container_width=True)
         else:
             st.info("No User transactions in selected date range")
         
-        # Grand Total
+        # Grand Total with formatted numbers
         st.write("#### 📊 GRAND TOTAL")
         grand_total_by_category = {}
         for cat in expected_categories:
@@ -333,21 +322,21 @@ if uploaded_file is not None:
             grand_total_by_category[f'{cat}_Total Amount (Rs)'] = pivot_report[f'{cat}_Total Amount (Rs)'].sum()
         
         grand_df = pd.DataFrame([
-            {'Category': 'Cash in', 'Transaction Count': grand_total_by_category.get('Cash in_Transaction Count', 0), 'Total Amount (Rs)': grand_total_by_category.get('Cash in_Total Amount (Rs)', 0)},
-            {'Category': 'Government payment (P2G)', 'Transaction Count': grand_total_by_category.get('Government payment (P2G)_Transaction Count', 0), 'Total Amount (Rs)': grand_total_by_category.get('Government payment (P2G)_Total Amount (Rs)', 0)},
-            {'Category': 'Merchant payment', 'Transaction Count': grand_total_by_category.get('Merchant payment_Transaction Count', 0), 'Total Amount (Rs)': grand_total_by_category.get('Merchant payment_Total Amount (Rs)', 0)},
-            {'Category': 'Topup', 'Transaction Count': grand_total_by_category.get('Topup_Transaction Count', 0), 'Total Amount (Rs)': grand_total_by_category.get('Topup_Total Amount (Rs)', 0)},
-            {'Category': 'Transfer to bank A/C (P2P)', 'Transaction Count': grand_total_by_category.get('Transfer to bank A/C (P2P)_Transaction Count', 0), 'Total Amount (Rs)': grand_total_by_category.get('Transfer to bank A/C (P2P)_Total Amount (Rs)', 0)}
+            {'Category': 'Cash in', 'Transaction Count': f"{grand_total_by_category.get('Cash in_Transaction Count', 0):,.0f}", 'Total Amount (Rs)': f"Rs. {grand_total_by_category.get('Cash in_Total Amount (Rs)', 0):,.2f}"},
+            {'Category': 'Government payment (P2G)', 'Transaction Count': f"{grand_total_by_category.get('Government payment (P2G)_Transaction Count', 0):,.0f}", 'Total Amount (Rs)': f"Rs. {grand_total_by_category.get('Government payment (P2G)_Total Amount (Rs)', 0):,.2f}"},
+            {'Category': 'Merchant payment', 'Transaction Count': f"{grand_total_by_category.get('Merchant payment_Transaction Count', 0):,.0f}", 'Total Amount (Rs)': f"Rs. {grand_total_by_category.get('Merchant payment_Total Amount (Rs)', 0):,.2f}"},
+            {'Category': 'Topup', 'Transaction Count': f"{grand_total_by_category.get('Topup_Transaction Count', 0):,.0f}", 'Total Amount (Rs)': f"Rs. {grand_total_by_category.get('Topup_Total Amount (Rs)', 0):,.2f}"},
+            {'Category': 'Transfer to bank A/C (P2P)', 'Transaction Count': f"{grand_total_by_category.get('Transfer to bank A/C (P2P)_Transaction Count', 0):,.0f}", 'Total Amount (Rs)': f"Rs. {grand_total_by_category.get('Transfer to bank A/C (P2P)_Total Amount (Rs)', 0):,.2f}"}
         ])
         
         col1, col2 = st.columns(2)
         with col1:
-            st.dataframe(grand_df.style.format({'Transaction Count': '{:,}', 'Total Amount (Rs)': 'Rs. {:,.2f}'}), use_container_width=True)
+            st.dataframe(grand_df, use_container_width=True)
         with col2:
             st.metric("📦 Total Transactions", f"{pivot_report['Total Transaction Count'].sum():,.0f}")
             st.metric("💰 Total Volume", f"Rs. {pivot_report['Total Amount (Rs)'].sum():,.2f}")
         
-        # Download report
+        # Download report (raw numbers, not formatted)
         export_agent = agent_report.copy() if len(agent_report) > 0 else pd.DataFrame()
         export_user = user_report.copy() if len(user_report) > 0 else pd.DataFrame()
         if len(export_agent) > 0:
@@ -361,7 +350,7 @@ if uploaded_file is not None:
             st.download_button("📥 Download Agent/User Report (CSV)", csv_report, f"agent_user_report.csv", "text/csv")
     
     # ============================================
-    # TTR REPORTING - High Value Users (Total Volume > 10 Lakhs)
+    # TTR REPORTING - High Value Users
     # ============================================
     st.subheader("📋 TTR Reporting - High Value Users (Total Debit + Credit > Rs. 10,00,000)")
     
@@ -398,10 +387,12 @@ if uploaded_file is not None:
         col3.metric("💸 Total Debit", f"Rs. {high_value_users['Total Debit (Rs)'].sum():,.2f}")
         col4.metric("📊 Total Volume", f"Rs. {high_value_users['Total Volume (Rs)'].sum():,.2f}")
         
-        st.dataframe(high_value_users[['MemberId', 'Name', 'Contact', 'Total Credit (Rs)', 'Total Debit (Rs)', 'Total Volume (Rs)', 'Net Flow (Rs)']].head(100).style.format({
-            'Total Credit (Rs)': 'Rs. {:,.2f}', 'Total Debit (Rs)': 'Rs. {:,.2f}',
-            'Total Volume (Rs)': 'Rs. {:,.2f}', 'Net Flow (Rs)': 'Rs. {:,.2f}'
-        }), use_container_width=True)
+        # Format the display dataframe
+        display_ttr = high_value_users.copy()
+        for col in ['Total Credit (Rs)', 'Total Debit (Rs)', 'Total Volume (Rs)', 'Net Flow (Rs)']:
+            display_ttr[col] = display_ttr[col].apply(lambda x: f"Rs. {x:,.2f}")
+        
+        st.dataframe(display_ttr[['MemberId', 'Name', 'Contact', 'Total Credit (Rs)', 'Total Debit (Rs)', 'Total Volume (Rs)', 'Net Flow (Rs)']].head(100), use_container_width=True)
         
         csv_ttr = high_value_users.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Download TTR Report (CSV)", csv_ttr, f"ttr_report.csv", "text/csv")
@@ -428,9 +419,14 @@ if uploaded_file is not None:
         merchant_summary['Rank by Volume'] = merchant_summary['Total Volume (Rs)'].rank(ascending=False).astype(int)
         merchant_summary['Avg Transaction (Rs)'] = merchant_summary['Total Volume (Rs)'] / merchant_summary['Transaction Count']
         
-        st.dataframe(merchant_summary[['Rank by Volume', 'Merchant Name', 'Transaction Count', 'Total Volume (Rs)', 'Avg Transaction (Rs)', 'Unique Users']].head(50).style.format({
-            'Total Volume (Rs)': 'Rs. {:,.2f}', 'Avg Transaction (Rs)': 'Rs. {:,.2f}'
-        }), use_container_width=True)
+        # Format the display dataframe
+        display_merchant = merchant_summary.copy()
+        display_merchant['Total Volume (Rs)'] = display_merchant['Total Volume (Rs)'].apply(lambda x: f"Rs. {x:,.2f}")
+        display_merchant['Avg Transaction (Rs)'] = display_merchant['Avg Transaction (Rs)'].apply(lambda x: f"Rs. {x:,.2f}")
+        display_merchant['Transaction Count'] = display_merchant['Transaction Count'].apply(lambda x: f"{x:,.0f}")
+        display_merchant['Unique Users'] = display_merchant['Unique Users'].apply(lambda x: f"{x:,.0f}")
+        
+        st.dataframe(display_merchant[['Rank by Volume', 'Merchant Name', 'Transaction Count', 'Total Volume (Rs)', 'Avg Transaction (Rs)', 'Unique Users']].head(50), use_container_width=True)
         
         csv_merchant = merchant_summary.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Download Merchant Summary (CSV)", csv_merchant, "merchant_summary.csv", "text/csv")
@@ -443,7 +439,12 @@ if uploaded_file is not None:
             name_map = df_filtered.groupby('MemberId')['Name'].first().to_dict()
             top_paying_users['Name'] = top_paying_users['MemberId'].map(name_map)
         top_paying_users = top_paying_users.sort_values('Total Paid (Rs)', ascending=False)
-        st.dataframe(top_paying_users.head(30).style.format({'Total Paid (Rs)': 'Rs. {:,.2f}'}), use_container_width=True)
+        
+        display_payers = top_paying_users.head(30).copy()
+        display_payers['Total Paid (Rs)'] = display_payers['Total Paid (Rs)'].apply(lambda x: f"Rs. {x:,.2f}")
+        display_payers['Transaction Count'] = display_payers['Transaction Count'].apply(lambda x: f"{x:,.0f}")
+        
+        st.dataframe(display_payers[['MemberId', 'Name', 'Total Paid (Rs)', 'Transaction Count', 'Unique Merchants']], use_container_width=True)
     else:
         st.info("No merchant payment transactions found")
     
@@ -465,14 +466,18 @@ if uploaded_file is not None:
         fig_volume = px.bar(cash_in_summary.head(10), x='Cash-In Mode', y='Total Volume (Rs)', title='Top 10 Cash-In Modes by Volume', color='Total Volume (Rs)')
         col2.plotly_chart(fig_volume, use_container_width=True)
         
-        st.dataframe(cash_in_summary.style.format({'Transaction Count': '{:,}', 'Total Volume (Rs)': 'Rs. {:,.2f}'}), use_container_width=True)
+        display_cashin = cash_in_summary.copy()
+        display_cashin['Transaction Count'] = display_cashin['Transaction Count'].apply(lambda x: f"{x:,.0f}")
+        display_cashin['Total Volume (Rs)'] = display_cashin['Total Volume (Rs)'].apply(lambda x: f"Rs. {x:,.2f}")
+        st.dataframe(display_cashin, use_container_width=True)
+        
         csv_cashin = cash_in_summary.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Download Cash-In Summary (CSV)", csv_cashin, "cashin_summary.csv", "text/csv")
     else:
         st.info("No Cash-In transactions found")
     
     # ============================================
-    # POWER USERS (Cash-In + P2P Debit + Bank Transfer Out)
+    # POWER USERS
     # ============================================
     st.subheader("👑 Top Power Users (Cash-In + P2P Debit + Bank Transfer)")
     
@@ -502,10 +507,14 @@ if uploaded_file is not None:
             })
         
         power_users_df = pd.DataFrame(user_summaries).sort_values('Total Cash-In (Rs)', ascending=False)
-        st.dataframe(power_users_df.head(50).style.format({
-            'Total Cash-In (Rs)': 'Rs. {:,.2f}', 'Total P2P Debit (Rs)': 'Rs. {:,.2f}',
-            'Total Bank Transfer Out (Rs)': 'Rs. {:,.2f}', 'Total Outflow': 'Rs. {:,.2f}', 'Net Flow (Rs)': 'Rs. {:,.2f}'
-        }), use_container_width=True)
+        
+        display_power = power_users_df.head(50).copy()
+        for col in ['Total Cash-In (Rs)', 'Total P2P Debit (Rs)', 'Total Bank Transfer Out (Rs)', 'Total Outflow', 'Net Flow (Rs)']:
+            display_power[col] = display_power[col].apply(lambda x: f"Rs. {x:,.2f}")
+        for col in ['Cash-In Count', 'P2P Debit Count', 'Bank Transfer Count']:
+            display_power[col] = display_power[col].apply(lambda x: f"{x:,.0f}")
+        
+        st.dataframe(display_power, use_container_width=True)
         
         csv_power = power_users_df.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Download Power Users as CSV", csv_power, "power_users.csv", "text/csv")
@@ -547,9 +556,15 @@ if uploaded_file is not None:
             col4.metric("🏦 Bank Transfer", f"Rs. {user_bank:,.2f}")
             col5.metric("📈 Net Flow", f"Rs. {total_credit - total_debit:,.2f}")
             
+            # Format transaction history display
+            display_user_data = user_data.copy()
+            display_user_data['Amount (Rs)'] = display_user_data['Amount (Rs)'].apply(lambda x: f"Rs. {x:,.2f}")
+            if 'Available Balance(Rs)' in display_user_data.columns:
+                display_user_data['Available Balance(Rs)'] = display_user_data['Available Balance(Rs)'].apply(lambda x: f"Rs. {x:,.2f}" if pd.notna(x) else 'N/A')
+            
             display_cols = ['CreatedDate', 'Display Service', 'Sign', 'Amount (Rs)', 'Available Balance(Rs)', 'Remarks', 'Gateway Status']
-            available_cols = [col for col in display_cols if col in user_data.columns]
-            st.dataframe(user_data[available_cols].sort_values('CreatedDate', ascending=False), use_container_width=True)
+            available_cols = [col for col in display_cols if col in display_user_data.columns]
+            st.dataframe(display_user_data[available_cols].sort_values('CreatedDate', ascending=False), use_container_width=True)
             
             csv_user = user_data.to_csv(index=False).encode('utf-8')
             st.download_button("📥 Download User Transactions as CSV", csv_user, f"user_{user_member_id}_transactions.csv", "text/csv")
@@ -588,7 +603,7 @@ else:
     st.info("👈 Please upload your Transaction Excel file to get started")
     st.markdown("""
     ### 📋 Dashboard Sections:
-    1. **Agent vs User Transaction Report** - NEW! Segregates transactions by Agent/User and value ranges
+    1. **Agent vs User Transaction Report** - Segregates transactions by Agent/User and value ranges
     2. **TTR Reporting** - Users with transaction volume > Rs. 10,00,000
     3. **Merchant Payment Analysis** - Top merchants by volume and count
     4. **Cash-In Modes Analysis** - How users load money
@@ -596,4 +611,9 @@ else:
     6. **User Lookup** - Search any user's transactions
     7. **Most Used Services** - Overall transaction ranking
     8. **Daily Transaction Trend** - Volume over time
+    
+    ### 📊 Number Formatting:
+    - All volumes show **Rs. 1,234,567.89** format
+    - All counts show **1,234,567** format
+    - Commas added for better readability
     """)
